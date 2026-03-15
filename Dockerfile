@@ -5,10 +5,10 @@ WORKDIR /app
 RUN apk add --no-cache tzdata ca-certificates
 
 COPY go.mod go.sum ./
-COPY vendor/ vendor/
+RUN GONOSUMDB=* GOPROXY=https://goproxy.io,direct go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /bin/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server
 
 
 FROM scratch
