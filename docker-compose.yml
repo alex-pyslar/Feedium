@@ -1,0 +1,8 @@
+services:
+  rss-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["-config", "/config/config.yaml"]
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro

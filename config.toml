@@ -1,0 +1,91 @@
+# ============================================================
+# Feedium — конфигурация приложения
+# Подключения к БД, токены и секреты — в .env (не здесь!)
+# ============================================================
+
+# ---------- Telegram (только поведение, не токен) ----------
+[telegram]
+update_timeout_seconds = 30
+max_messages_per_run   = 5
+
+# ---------- Elasticsearch (только поведение) ---------------
+[elasticsearch]
+enabled = true
+
+# ---------- ClickHouse (только поведение) ------------------
+[clickhouse]
+enabled           = true
+batch_cron        = "0 3 * * *"  # батч-переобучение каждую ночь в 03:00
+batch_window_days = 7            # окно истории реакций для пересчёта весов
+
+# ---------- Скоринг / мини-нейросеть -----------------------
+[scoring]
+recency_half_life_hours = 24.0  # статья через 24ч теряет половину popularity score
+relevance_weight        = 0.7   # α — вес релевантности в итоговом скоре
+popularity_weight       = 0.3   # β — вес популярности (новизна + вес ленты)
+learning_rate           = 0.05  # η — скорость обучения весов ключевых слов
+positive_reward_delta   = 1.0   # дельта при позитивной реакции
+negative_reward_delta   = -1.0  # дельта при негативной реакции
+min_keyword_weight      = 0.1   # нижняя граница веса ключевого слова
+max_keyword_weight      = 10.0  # верхняя граница
+min_score_to_post       = 0.3   # минимальный скор для публикации
+
+# ---------- Планировщик ------------------------------------
+[scheduler]
+fetch_cron    = "*/30 * * * *"  # каждые 30 минут
+reaction_cron = "*/5 * * * *"  # reconciliation реакций каждые 5 минут
+timezone      = "UTC"
+
+# ---------- Суммаризатор постов ----------------------------
+[summarizer]
+enabled   = true
+provider  = "local"     # local (встроенный) | openai (Ollama и др.)
+# Следующие параметры только для provider = "openai":
+model      = "llama3.2" # название модели в локальном LLM
+max_tokens = 400
+
+# ---------- MinIO (хранилище изображений) ------------------
+[media]
+enabled = true
+bucket  = "article-images"
+use_ssl = false
+
+# ---------- Логирование ------------------------------------
+[log]
+level       = "info"   # debug | info | warn | error
+development = false
+
+# format: "json" (структурированный, для prod) | "console" (цветной, для dev)
+# Если не задан — выбирается автоматически: json в prod, console при development=true.
+# format = "json"
+
+# Запись в файл с ротацией (если не задан — только stdout).
+# file         = "logs/feedium.log"
+# max_size_mb  = 100   # ротация при достижении размера
+# max_backups  = 5     # сколько старых файлов хранить
+# max_age_days = 30    # удалять файлы старше N дней
+# compress     = true  # gzip-сжатие ротированных файлов
+
+# sampling: отбрасывать дублирующиеся log-строки при flood-e (рекомендуется в prod)
+sampling = true
+
+# ---------- RSS-ленты --------------------------------------
+[[feeds]]
+name   = "Hacker News"
+url    = "https://news.ycombinator.com/rss"
+weight = 1.2
+
+[[feeds]]
+name   = "Habr"
+url    = "https://habr.com/ru/rss/articles/"
+weight = 1.0
+
+[[feeds]]
+name   = "TechCrunch"
+url    = "https://techcrunch.com/feed/"
+weight = 1.0
+
+[[feeds]]
+name   = "The Verge"
+url    = "https://www.theverge.com/rss/index.xml"
+weight = 0.9

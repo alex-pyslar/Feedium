@@ -1,0 +1,40 @@
+# ---- Secrets & local config ----
+.env
+*.env
+.env.*
+!.env.example
+
+# ---- Build output ----
+/feedium
+/feedium.exe
+/bin/
+dist/
+
+# ---- Go toolchain ----
+vendor/
+*.test
+*.out
+coverage.html
+coverage.out
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Docker local overrides ----
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ---- Logs ----
+*.log
+logs/
+
+.claude/
