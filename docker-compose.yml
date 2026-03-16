@@ -4,5 +4,7 @@ services:
     restart: unless-stopped
     env_file: .env
     command: ["-config", "/config/config.toml"]
+    ports:
+      - "8081:8081"
     volumes:
       - ./config.toml:/config/config.toml:ro

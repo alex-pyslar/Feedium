@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -125,6 +126,10 @@ func main() {
 	sched := scheduler.New(cfg, fetchSvc, reactionSvc, retrainSvc, log.Named("scheduler"))
 	must(sched.Start(ctx), "start scheduler")
 
+	// ---- Admin HTTP: ручной запуск задач ----
+	adminAddr := envOr("ADMIN_ADDR", ":8081")
+	startAdminServer(ctx, adminAddr, fetchSvc, retrainSvc, cfg, log)
+
 	<-ctx.Done()
 	log.Info("shutdown signal received")
 	sched.Stop()
@@ -133,6 +138,58 @@ func main() {
 		_ = analyticsClient.Close()
 	}
 	log.Info("shutdown complete")
+}
+
+func startAdminServer(
+	ctx context.Context,
+	addr string,
+	fetchSvc *app.FetchService,
+	retrainSvc *app.RetrainService,
+	cfg *config.Config,
+	log *zap.Logger,
+) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("POST /admin/fetch", func(w http.ResponseWriter, r *http.Request) {
+		go fetchSvc.Run(ctx)
+		log.Info("admin: manual fetch triggered")
+		w.WriteHeader(http.StatusAccepted)
+		fmt.Fprintln(w, "fetch started")
+	})
+
+	mux.HandleFunc("POST /admin/retrain", func(w http.ResponseWriter, r *http.Request) {
+		if retrainSvc == nil {
+			http.Error(w, "retrain unavailable: ClickHouse not connected", http.StatusServiceUnavailable)
+			return
+		}
+		go func() {
+			if err := retrainSvc.Run(ctx, cfg.ClickHouse.BatchWindowDays); err != nil {
+				log.Error("admin: manual retrain failed", zap.Error(err))
+			}
+		}()
+		log.Info("admin: manual retrain triggered")
+		w.WriteHeader(http.StatusAccepted)
+		fmt.Fprintln(w, "retrain started")
+	})
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+	go func() {
+		log.Info("admin server listening", zap.String("addr", addr))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("admin server", zap.Error(err))
+		}
+	}()
+	go func() {
+		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
+	}()
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func must(err error, msg string) {
