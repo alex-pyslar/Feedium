@@ -116,7 +116,7 @@ func (c *Client) MarkLiked(ctx context.Context, articleID int64) error {
 //
 // Используется scorer-ом вместо ручного TF-IDF.
 func (c *Client) Score(ctx context.Context, a domain.Article, keywords []domain.Keyword) (float64, error) {
-	bm25, err := c.bm25Score(ctx, a.ID, extractWords(keywords))
+	bm25, err := c.bm25Score(ctx, a.ID, extractTopWords(keywords, 150))
 	if err != nil {
 		c.log.Warn("es bm25 score", zap.Int64("id", a.ID), zap.Error(err))
 		bm25 = 0.5
@@ -357,10 +357,23 @@ func (c *Client) ensureIndex(ctx context.Context) error {
 
 // ---- helpers -------------------------------------------------------------
 
-func extractWords(keywords []domain.Keyword) []string {
-	words := make([]string, len(keywords))
-	for i, kw := range keywords {
-		words[i] = kw.Word
+// extractTopWords возвращает слова топ-N ключевых слов по весу.
+// Ограничивает размер BM25-запроса чтобы не превысить maxClauseCount ES.
+func extractTopWords(keywords []domain.Keyword, n int) []string {
+	sorted := make([]domain.Keyword, len(keywords))
+	copy(sorted, keywords)
+	// сортировка по убыванию веса (insertion sort — список обычно небольшой)
+	for i := 1; i < len(sorted); i++ {
+		for j := i; j > 0 && sorted[j].Weight > sorted[j-1].Weight; j-- {
+			sorted[j], sorted[j-1] = sorted[j-1], sorted[j]
+		}
+	}
+	if n > len(sorted) {
+		n = len(sorted)
+	}
+	words := make([]string, n)
+	for i := range words {
+		words[i] = sorted[i].Word
 	}
 	return words
 }
