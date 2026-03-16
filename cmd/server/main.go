@@ -43,6 +43,9 @@ func main() {
 	pool, err := postgres.NewPool(ctx, cfg.Database)
 	must(err, "connect postgres")
 
+	must(postgres.Migrate(pool), "run migrations")
+	log.Info("migrations applied")
+
 	store := postgres.New(pool, log.Named("postgres"))
 	must(store.Ping(ctx), "postgres ping")
 	must(store.UpsertFeedsFromConfig(ctx, cfg.Feeds), "upsert feeds")
