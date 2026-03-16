@@ -3,6 +3,6 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    command: ["-config", "/config/config.yaml"]
+    command: ["-config", "/config/config.toml"]
     volumes:
-      - ./config.yaml:/config/config.yaml:ro
+      - ./config.toml:/config/config.toml:ro
