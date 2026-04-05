@@ -1,0 +1,42 @@
+# ============================================================
+# Feedium Core — конфигурация
+# Секреты и адреса подключений — в .env / env vars
+# ============================================================
+
+[telegram]
+update_timeout_seconds = 30
+max_messages_per_run   = 5
+
+[scoring]
+min_score_to_post       = 0.3
+recency_half_life_hours = 24.0  # используется как fallback когда scorer недоступен
+
+[scheduler]
+fetch_cron    = "*/30 * * * *"
+reaction_cron = "*/5 * * * *"
+timezone      = "UTC"
+
+[log]
+level       = "info"
+development = false
+sampling    = true
+
+[[feeds]]
+name   = "Hacker News"
+url    = "https://news.ycombinator.com/rss"
+weight = 1.2
+
+[[feeds]]
+name   = "Habr"
+url    = "https://habr.com/ru/rss/articles/"
+weight = 1.0
+
+[[feeds]]
+name   = "TechCrunch"
+url    = "https://techcrunch.com/feed/"
+weight = 1.0
+
+[[feeds]]
+name   = "The Verge"
+url    = "https://www.theverge.com/rss/index.xml"
+weight = 0.9

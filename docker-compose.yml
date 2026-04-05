@@ -1,10 +1,86 @@
 services:
-  rss-bot:
-    build: .
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
     restart: unless-stopped
-    env_file: .env
-    command: ["-config", "/config/config.toml"]
+    environment:
+      POSTGRES_DB: feedium
+      POSTGRES_USER: feedium
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-feedium}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedium"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Scorer API (Python FastAPI) ───────────────────────────────────────────
+  # Оценивает релевантность статей. Компоненты:
+  #   1. BAAI/bge-m3         — мультиязычные эмбеддинги 1024-dim (pre-trained)
+  #   2. FAISS IndexFlatIP   — similarity к liked/disliked статьям
+  #   3. LightGBM LambdaRank — ранжировщик (обновляется trainer'ом через /reload)
+  scorer:
+    build: ./scorer
+    restart: unless-stopped
+    environment:
+      MODELS_DIR: /models
+      EMBED_MODEL: BAAI/bge-m3
+    volumes:
+      - models_data:/models
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Core (Go) ─────────────────────────────────────────────────────────────
+  # Парсит RSS → сохраняет в Postgres → запрашивает скоры у scorer →
+  # публикует топ в Telegram → собирает реакции (обучающие метки для trainer).
+  core:
+    build: ./core
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      scorer:
+        condition: service_healthy
+    environment:
+      DATABASE_DSN: postgres://feedium:${POSTGRES_PASSWORD:-feedium}@postgres:5432/feedium?sslmode=disable
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID}
+      SCORER_URL: http://scorer:8000
+      ADMIN_ADDR: :8081
     ports:
       - "8081:8081"
     volumes:
-      - ./config.toml:/config/config.toml:ro
+      - ./core/config.toml:/config/config.toml:ro
+    command: ["-config", "/config/config.toml"]
+
+  # ── Trainer (Python) ──────────────────────────────────────────────────────
+  # Обучает LightGBM LambdaRank на данных из Postgres.
+  # restart: "no" — запускается вручную: docker compose run trainer
+  # Для планового обучения каждые 12ч раскомментируй:
+  #   command: ["python", "main.py", "--schedule", "--interval", "12"]
+  trainer:
+    build: ./trainer
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_DSN: postgres://feedium:${POSTGRES_PASSWORD:-feedium}@postgres:5432/feedium?sslmode=disable
+      MODELS_DIR: /models
+      EMBED_MODEL: BAAI/bge-m3
+      SCORER_URL: http://scorer:8000
+      OPTUNA_TRIALS: "30"
+      # QUALITY_MODEL: ""   # раскомментируй чтобы отключить pseudo-labels (ускоряет обучение)
+    volumes:
+      - models_data:/models
+
+volumes:
+  postgres_data:
+  models_data:   # shared volume: trainer сохраняет модель, scorer её читает
